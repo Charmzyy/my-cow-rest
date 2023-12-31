@@ -4,7 +4,10 @@ RUN apt-get update -y && apt-get install -y libmcrypt-dev libonig-dev unzip zlib
 
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN docker-php-ext-install pdo mbstring zip
+RUN docker-php-ext-install mysqli pdo pdo_mysql mbstring zip
+
+
+RUN cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini && sed -i -e "s/;extension=pdo_mysql/extension=pdo_mysql/" /usr/local/etc/php/php.ini
 
 ENV COMPOSER_ALLOW_SUPERUSER 1
 
