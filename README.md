@@ -24,6 +24,12 @@ Explore our API endpoints and test them using Postman:
 
 Please note that this project is no longer live. You can host it on your own server and use the provided Postman documentation to interact with the API endpoints.
 
+## Other Repositories
+
+- [FastAPI Service](<https://github.com/Charmzyy/my-cow-py>): Backend service for image classification using FastAPI.
+- [Frontend Repository](<https://github.com/Charmzyy/my-cow-client>): Frontend application for interacting with the classification system.
+
+
 
 
 
