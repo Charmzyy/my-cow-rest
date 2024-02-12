@@ -16,6 +16,14 @@ This is a Laravel application that serves as the backend for a My cow breed  cla
 3.  Migrate Database : php artisan migrate.
 4.  Start Server : php artisan serve --port=8001
 
+## API Documentation
+
+Explore our API endpoints and test them using Postman:
+
+[Postman Documentation](<https://www.postman.com/cryosat-geoscientist-7709021/workspace/cowbreedclassification>)
+
+Please note that this project is no longer live. You can host it on your own server and use the provided Postman documentation to interact with the API endpoints.
+
 
 
 
