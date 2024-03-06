@@ -49,48 +49,44 @@ return response()->json($data,200);
      }
      
      public function getPosts($status = null)
-     {
-         try {
-             $query = UserPost::query();
-     
-             // Filter posts based on status
-             if ($status === 'unverified') {
-                 $query->whereNull('is_verified');
-             } elseif ($status === 'verified') {
-                 $query->where('is_verified', 1);
-             } elseif ($status !== null) {
-                 return response()->json(['message' => 'Invalid status provided'], 400);
-             }
-     
-             $posts = $query->paginate(8); // Paginate by 10 items per page
-     
-             if ($posts->isEmpty()) {
-                 return response()->json(['message' => 'No Posts'], 404);
-             }
-
-             
-             $data = $posts->map(function ($post) {
-                return [
-                    'id' => $post->id,
-                    'cow_name' => $post->cow_name,
-                    'predicted_class' => $post->predicted_class,
-                    'confidence' => $post->confidence,
-                    'image' => $post->image,
-                    'owner' => $post->user->fullname,
-                ];
-            });
-     
-             return response()->json([
-                 'posts' => $data,
-                 
-                 
-                 
-                 'message' => 'Posts retrieved successfully'
-             ], 200);
-         } catch (\Throwable $th) {
-             return response()->json(['message' => $th->getMessage()], 500);
-         }
-     }
+{
+    try {
+        $query = UserPost::query();
+        
+        // Filter posts based on status
+        if ($status === 'unverified') {
+            $query->whereNull('is_verified');
+        } elseif ($status === 'verified') {
+            $query->where('is_verified', 1);
+        } elseif ($status !== null) {
+            return response()->json(['message' => 'Invalid status provided'], 400);
+        }
+        
+        $posts = $query->get(); // Fetch all items without pagination
+        
+        if ($posts->isEmpty()) {
+            return response()->json(['message' => 'No Posts'], 404);
+        }
+        
+        $data = $posts->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'cow_name' => $post->cow_name,
+                'predicted_class' => $post->predicted_class,
+                'confidence' => $post->confidence,
+                'image' => $post->image,
+                'owner' => $post->user->fullname,
+            ];
+        });
+        
+        return response()->json([
+            'posts' => $data,
+            'message' => 'Posts retrieved successfully'
+        ], 200);
+    } catch (\Throwable $th) {
+        return response()->json(['message' => $th->getMessage()], 500);
+    }
+}
      
      
    

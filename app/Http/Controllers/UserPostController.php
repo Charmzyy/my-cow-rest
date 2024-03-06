@@ -36,7 +36,8 @@ class UserPostController extends Controller
             $imageData = file_get_contents($imagePath);
     
             // Send a POST request to your FastAPI endpoint
-            $response = $client->post('http://127.0.0.1:8003/predict', [
+            // $response = $client->post('http://127.0.0.1:8003/predict', [
+            $response = $client->post('http://45.55.126.45:8003/predict', [
                 'multipart' => [
                     [
                         'name' => 'file',
