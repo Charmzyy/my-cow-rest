@@ -37,7 +37,7 @@ class UserPostController extends Controller
     
             // Send a POST request to your FastAPI endpoint
             // $response = $client->post('http://127.0.0.1:8003/predict', [
-            $response = $client->post('http://45.55.126.45:8003/predict', [
+            $response = $client->post('https://my-cow-py.onrender.com/predict', [
                 'multipart' => [
                     [
                         'name' => 'file',
