@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'ml' => [
+        'predict_url' => env('PY_PREDICT_URL', 'https://my-cow-py.onrender.com/predict'),
+    ],
+
 ];

@@ -8,8 +8,20 @@ use App\Http\Controllers\UserPostController;
 use App\Http\Middleware\UserMiddleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+
+
+// Healthcheck for Docker: 200 when the app can reach the database, 503 otherwise
+Route::get('health', function () {
+    try {
+        DB::connection()->getPdo();
+        return response()->json(['status' => 'ok']);
+    } catch (\Throwable $e) {
+        return response()->json(['status' => 'error', 'db' => $e->getMessage()], 503);
+    }
+});
 
 
 

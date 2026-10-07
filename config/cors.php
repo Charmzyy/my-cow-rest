@@ -19,8 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['https://my-cow-client.vercel.app'],
-   
+    'allowed_origins' => array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', 'https://my-cow-client.vercel.app'))),
 
     'allowed_origins_patterns' => [],
 

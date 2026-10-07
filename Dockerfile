@@ -12,7 +12,7 @@ RUN cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini && sed -
 ENV COMPOSER_ALLOW_SUPERUSER 1
 
 WORKDIR /app
-COPY . /app
+COPY . .
 
 RUN composer install
 RUN php artisan storage:link
