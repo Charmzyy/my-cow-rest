@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('password');
             $table->text('bio')->nullable();
             $table->string('avatar')->nullable();
-            $table->integer('phone')->nullable();
+            $table->string('phone', 20)->nullable(); // string: keeps leading 0 / +254 prefixes
             $table->rememberToken();
             $table->timestamps();
         });

@@ -17,14 +17,9 @@ class is_user
      */
     public function handle(Request $request, Closure $next)
     {
-        if(Auth::check() && Auth::user()->role == 0){
-           
-        }
-        else
-        {
-            return response()->json([
-                "Message"=>"Not Authorized"
-            ],401);
+        // Signed in but the wrong role -> 403 Forbidden (401 means "not signed in")
+        if (!Auth::check() || Auth::user()->role != 0) {
+            return response()->json(['message' => 'Not Authorized'], 403);
         }
         return $next($request);
     }

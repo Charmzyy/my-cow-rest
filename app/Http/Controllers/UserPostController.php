@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserPost;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use GuzzleHttp\Client;
 
@@ -70,8 +68,13 @@ class UserPostController extends Controller
                 'confidence' => $confidence,
                 'userpost' => $userPost // Optional: Return the created UserPost
             ], 201);
+        } catch (\GuzzleHttp\Exception\GuzzleException $th) {
+            // The FastAPI model service is down, asleep or unreachable
+            report($th);
+            return response()->json(['message' => 'The breed prediction service is unavailable right now. Please try again in a few minutes.'], 503);
         } catch (\Throwable $th) {
-            return response()->json([$th->getMessage()]);
+            report($th);
+            return response()->json(['message' => 'Could not process the photo.'], 500);
         }
     }
     
