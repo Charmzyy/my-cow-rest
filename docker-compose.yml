@@ -1,27 +1,43 @@
-version: '3.8'
+# DEV compose: builds the image from source. (deploy-app/ has the pull-only version.)
+# Compose auto-reads ./.env for ${VAR} substitution below, and env_file passes it into the app.
+#   docker compose up -d --build
+#   docker compose exec app php artisan migrate
 
 services:
-  php:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
+    image: cow-rest:dev              # name of the image `build` produces
+    env_file: .env                   # Laravel config at RUN time (not baked into the image)
     ports:
-      - "8001:8001"
+      - "8001:8001"                  # host:container; the browser/client calls localhost:8001
+    volumes:
+      - uploads:/app/storage/app/public   # cow images + avatars survive container re-creation
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy   # wait until MySQL answers, not just "container started"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   mysql:
-    image: mysql:latest
-    command: --default-authentication-plugin=mysql_native_password
-    restart: always
+    image: mysql:8.0                 # pinned: 8.4+/9 dropped the old auth flag your old file used
     environment:
-      MYSQL_ALLOW_EMPTY_PASSWORD: yes
-      MYSQL_DATABASE: new
-    ports:
-      - "3306:3306"
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MYSQL_DATABASE: ${DB_DATABASE}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql    # the database survives `down`; only `down -v` deletes it
+    # no `ports:`: only the app (same compose network) talks to MySQL, via hostname "mysql"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
 volumes:
   mysql_data:
-    driver: local
+  uploads:

@@ -1,0 +1,44 @@
+# Everything listed here is NOT sent to the Docker build (not in the build context, so never in the image).
+
+# Secrets: config arrives at RUN time via env_file / --env-file
+.env
+.env.*
+!.env.example
+
+# Rebuilt inside the image by composer
+vendor/
+
+# Frontend tooling (this image is API-only)
+node_modules/
+package.json
+vite.config.js
+
+# Git + editor + Docker files themselves
+.git/
+.gitignore
+.gitattributes
+.editorconfig
+.idea/
+.vscode/
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Runtime data from your machine: logs, sessions, cache, uploads
+# (keep the folders' .gitignore files so the directories still exist in the image)
+storage/logs/*
+!storage/logs/.gitignore
+storage/framework/cache/data/*
+storage/framework/sessions/*
+!storage/framework/sessions/.gitignore
+storage/framework/views/*
+!storage/framework/views/.gitignore
+storage/app/public/*
+!storage/app/public/.gitignore
+bootstrap/cache/*.php
+public/storage
+
+# Tests are not needed to run the API
+tests/
+phpunit.xml
+.phpunit.result.cache

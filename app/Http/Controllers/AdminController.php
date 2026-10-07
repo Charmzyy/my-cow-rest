@@ -36,8 +36,9 @@ class AdminController extends Controller
         foreach ($users as $user) {
             $data[] = [
                 'id'=>$user->id,
-                'name' => $user->name,
+                'name' => $user->fullname, // column was renamed name -> fullname
                 'email'=>$user->email,
+                'role'=>$user->role,
                 
                
                 
@@ -111,7 +112,12 @@ try {
 
     ];
 
-    Mail::to($post->user->email)->send(new AcceptedMail($data));
+    // The decision is already saved; a mail outage must not turn it into an error
+    try {
+        Mail::to($post->user->email)->send(new AcceptedMail($data));
+    } catch (\Throwable $mailError) {
+        report($mailError);
+    }
     return response()->json(
         $data
     ,201);
@@ -144,7 +150,11 @@ try {
                 'Message' => "Rejected Cow"
             ];
             
-            Mail::to($post->user->email)->send(new RejectedMail($data));
+            try {
+                Mail::to($post->user->email)->send(new RejectedMail($data));
+            } catch (\Throwable $mailError) {
+                report($mailError);
+            }
             
             return response()->json($data, 201);
         } catch (\Throwable $th) {

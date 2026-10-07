@@ -65,7 +65,7 @@ class AuthController extends Controller
     try {
         //code...
         $credentials = $request->only(['email', 'password']);
-        error_log(json_encode($credentials));
+        
         if (Auth::attempt($credentials)) {
              $user = auth()->user();
              $token = $user->createToken('token')->plainTextToken;
