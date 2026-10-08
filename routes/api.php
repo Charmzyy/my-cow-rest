@@ -1,7 +1,17 @@
 <?php
 
+use App\Http\Controllers\AdminCertificationController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminOfficerController;
+use App\Http\Controllers\AdminStatsController;
+use App\Http\Controllers\AnimalController;
+use App\Http\Controllers\AnimalEventController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CertificateController;
+use App\Http\Controllers\CertificationRequestController;
+use App\Http\Controllers\HoldingController;
+use App\Http\Controllers\OfficerApplicationController;
+use App\Http\Controllers\OfficerReviewController;
 use App\Http\Controllers\UserPostController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -18,34 +28,103 @@ Route::get('health', function () {
 });
 
 
-// Public auth routes
+// Public auth routes. Throttled per IP (requests per minute) against password guessing
+// and signup / reset-email spam; over the limit = HTTP 429.
 Route::controller(AuthController::class)->group(function () {
-    Route::post('login', 'login');
-    Route::post('register', 'register');
-    Route::post('forgot/password', 'forgot');
-    Route::post('reset/password', 'reset');
+    Route::post('login', 'login')->middleware('throttle:10,1');
+    Route::post('register', 'register')->middleware('throttle:5,1');
+    Route::post('forgot/password', 'forgot')->middleware('throttle:5,1');
+    Route::post('reset/password', 'reset')->middleware('throttle:10,1');
 });
+
+
+// Public certificate check: what the QR code on a certificate opens. Throttled against code guessing.
+Route::get('verify/{code}', [CertificateController::class, 'verify'])->middleware('throttle:30,1');
 
 
 // Any signed-in user
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('me', [AuthController::class, 'me']);
     Route::post('logout', [AuthController::class, 'logout']);
     Route::put('/', [AuthController::class, 'updateProfile']); // update phone / avatar
+
+    // Owner, certifying officer or admin (checked in the controller)
+    Route::get('certificates/{certificate}/pdf', [CertificateController::class, 'pdf']);
 });
 
 
-// Officers (role 1)
-Route::middleware(['auth:sanctum', 'is_admin'])->group(function () {
+// Platform admins
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('admin/users', [AdminController::class, 'users']);
     Route::get('admin/{status?}', [AdminController::class, 'getPosts'])
         ->where('status', 'unverified|verified');
     Route::put('admin/{id}/accept', [AdminController::class, 'accept']);
     Route::put('admin/{id}/reject', [AdminController::class, 'reject']);
     Route::delete('admin/{id}/delete', [AdminController::class, 'delete']);
+
+    // Officer verification
+    Route::get('admin/officers', [AdminOfficerController::class, 'index']);
+    Route::put('admin/officers/{officer}/approve', [AdminOfficerController::class, 'approve']);
+    Route::put('admin/officers/{officer}/reject', [AdminOfficerController::class, 'reject']);
+    Route::put('admin/officers/{officer}/suspend', [AdminOfficerController::class, 'suspend']);
+
+    // Overview numbers
+    Route::get('admin/stats', [AdminStatsController::class, 'index']);
+
+    // Certification requests: see all (paged), assign to an officer, or auto-assign by county
+    Route::get('admin/certification-requests', [AdminCertificationController::class, 'index']);
+    Route::post('admin/certification-requests/auto-assign', [AdminCertificationController::class, 'autoAssign']);
+    Route::put('admin/certification-requests/{certificationRequest}/assign', [AdminCertificationController::class, 'assign']);
+
+    // Certificates: issue for requests approved before v6, revoke
+    Route::post('admin/certification-requests/{certificationRequest}/certificate', [CertificateController::class, 'issue']);
+    Route::put('admin/certificates/{certificate}/revoke', [CertificateController::class, 'revoke']);
+});
+
+// Verified officers (role officer): their review queue and decisions
+Route::middleware(['auth:sanctum', 'role:officer'])->prefix('officer')->group(function () {
+    Route::get('requests', [OfficerReviewController::class, 'index']);
+    Route::get('requests/{certificationRequest}', [OfficerReviewController::class, 'show']);
+    Route::put('requests/{certificationRequest}/start', [OfficerReviewController::class, 'start']);
+    Route::put('requests/{certificationRequest}/approve', [OfficerReviewController::class, 'approve']);
+    Route::put('requests/{certificationRequest}/needs-info', [OfficerReviewController::class, 'needsInfo']);
+    Route::put('requests/{certificationRequest}/reject', [OfficerReviewController::class, 'reject']);
 });
 
 
-// Farmers (role 0)
-Route::middleware(['auth:sanctum', 'is_user'])->group(function () {
-    Route::post('mypost', [UserPostController::class, 'store']);
+// Reference data for forms
+Route::get('counties', fn () => \App\Models\County::orderBy('name')->get());
+
+// Farmers
+Route::middleware(['auth:sanctum', 'role:farmer'])->group(function () {
+    Route::post('mypost', [UserPostController::class, 'store']);   // free quick breed check
+
+    // Farms (where animals are kept; owner only)
+    Route::get('holdings', [HoldingController::class, 'index']);
+    Route::post('holdings', [HoldingController::class, 'store']);
+    Route::put('holdings/{holding}', [HoldingController::class, 'update']);
+    Route::delete('holdings/{holding}', [HoldingController::class, 'destroy']);
+
+    // Herd. Ownership is checked per animal by AnimalPolicy.
+    Route::get('animals', [AnimalController::class, 'index']);
+    Route::post('animals', [AnimalController::class, 'store']);
+    Route::get('animals/{animal}', [AnimalController::class, 'show']);
+    Route::put('animals/{animal}', [AnimalController::class, 'update']);
+    Route::delete('animals/{animal}', [AnimalController::class, 'destroy']);
+    Route::post('animals/{animal}/photos', [AnimalController::class, 'uploadPhoto']);
+    Route::delete('animals/{animal}/photos/{photo}', [AnimalController::class, 'deletePhoto']);
+
+    // Health / breeding / growth records
+    Route::get('animals/{animal}/events', [AnimalEventController::class, 'index']);
+    Route::post('animals/{animal}/events', [AnimalEventController::class, 'store']);
+    Route::delete('animals/{animal}/events/{event}', [AnimalEventController::class, 'destroy']);
+
+    // Certification requests for the farmer's own animals
+    Route::post('animals/{animal}/certification-requests', [CertificationRequestController::class, 'store']);
+    Route::put('certification-requests/{certificationRequest}/cancel', [CertificationRequestController::class, 'cancel']);
+    Route::put('certification-requests/{certificationRequest}/resubmit', [CertificationRequestController::class, 'resubmit']);
+
+    // Apply to become a certifying officer
+    Route::get('officer-application', [OfficerApplicationController::class, 'show']);
+    Route::post('officer-application', [OfficerApplicationController::class, 'store']);
 });

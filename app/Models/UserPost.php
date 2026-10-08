@@ -16,6 +16,7 @@ class UserPost extends Model
     protected $fillable =[
         'user_id',
         'image',
+        'image_hash',
         'predicted_class',
         'confidence',
         'is_verified',

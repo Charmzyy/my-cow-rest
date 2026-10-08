@@ -12,7 +12,10 @@ class TrustProxies extends Middleware
      *
      * @var array<int, string>|string|null
      */
-    protected $proxies;
+    // The client's nginx (and later Caddy) forwards requests from inside the Docker network.
+    // Trust X-Forwarded-* only from private ranges, so the real visitor IP is used for rate
+    // limiting and logs, while nobody on the internet can spoof it.
+    protected $proxies = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
 
     /**
      * The headers that should be used to detect proxies.

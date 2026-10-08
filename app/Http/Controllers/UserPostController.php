@@ -3,70 +3,59 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserPost;
-use Illuminate\Support\Facades\Validator;
+use App\Services\BreedPredictor;
 use Illuminate\Http\Request;
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Validator;
 
+// Free "quick breed check": one photo in, AI breed guess out (stored for officer review).
 class UserPostController extends Controller
 {
-    public function store(Request $request)
+    public function store(Request $request, BreedPredictor $predictor)
     {
+        $validator = Validator::make($request->all(), [
+            'image' => 'required|image|mimes:jpeg,png,jpg,bmp|max:4096|min:10',
+            'cow_name' => 'required|string|max:80',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $userId = $request->user()->id;
+        $hash = hash_file('sha256', $request->file('image')->getRealPath());
+
+        // Same person, same photo, within a day: return the earlier result instead of a duplicate
+        $existing = UserPost::where('user_id', $userId)
+            ->where('image_hash', $hash)
+            ->where('created_at', '>=', now()->subDay())
+            ->latest()
+            ->first();
+        if ($existing) {
+            return response()->json([
+                'predictedClass' => $existing->predicted_class,
+                'confidence' => $existing->confidence,
+                'userpost' => $existing,
+                'duplicate' => true,
+            ], 200);
+        }
+
         try {
-            $validator = Validator::make($request->all(), [
-                'image' => 'required|image|mimes:jpeg,png,jpg,bmp|max:4096|min:10',
-                'cow_name' =>'required'
-            ]);
-    
-            if ($validator->fails()) {
-                return response()->json(['errors' => $validator->errors()], 422);
-            }
-    
-            $userId = $request->user()->id;
-    
-            // Store the image
             $image = $request->file('image')->store('public/uploads');
-    
-            // Create a Guzzle client instance
-            $client = new Client();
-    
-            // Prepare the image data and user_id to send to FastAPI
-            $imagePath = storage_path('app/' . $image);
-            $imageData = file_get_contents($imagePath);
-    
-            // Send a POST request to your FastAPI endpoint
-            $response = $client->post(config('services.ml.predict_url'), [
-                'multipart' => [
-                    [
-                        'name' => 'file',
-                        'contents' => $imageData,
-                        'filename' => basename($imagePath),
-                    ],
-                    [
-                        'name' => 'user_id',
-                        'contents' => $userId,
-                    ],
-                ],
-            ]);
-    
-            // Get the response from FastAPI
-            $apiResponse = json_decode($response->getBody(), true);
-    
-            $predictedClass = $apiResponse['class'] ?? null;
-            $confidence = $apiResponse['confidence'] ?? null;
-    
-            // Create a new UserPost record with prediction details
+            $prediction = $predictor->predict(storage_path('app/' . $image));
+
             $userPost = UserPost::create([
                 'image' => str_replace('public/', '', $image),
+                'image_hash' => $hash,
                 'user_id' => $userId,
-                'predicted_class' => $predictedClass,
-                'confidence' => $confidence,
+                'predicted_class' => $prediction['class'],
+                'confidence' => $prediction['confidence'],
                 'cow_name' => $request->input('cow_name'),
             ]);
-    
+
             return response()->json([
-                'predictedClass' => $predictedClass,
-                'confidence' => $confidence,
-                'userpost' => $userPost // Optional: Return the created UserPost
+                'predictedClass' => $prediction['class'],
+                'confidence' => $prediction['confidence'],
+                'userpost' => $userPost,
             ], 201);
         } catch (\GuzzleHttp\Exception\GuzzleException $th) {
             // The FastAPI model service is down, asleep or unreachable
@@ -77,10 +66,4 @@ class UserPostController extends Controller
             return response()->json(['message' => 'Could not process the photo.'], 500);
         }
     }
-    
-
-
-
 }
-
-

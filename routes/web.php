@@ -3,17 +3,8 @@
 use Illuminate\Support\Facades\Route;
 
 /*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
+| This backend is API-only: everything lives in routes/api.php under /api.
+| The web UI is the separate Vue app (my-cow-client).
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
-Route::put('update/{id}/profile',[ProfileController::class,'update_profile']); //profil change
+Route::get('/', fn () => response()->json(['name' => 'MyCow API', 'docs' => '/api']));

@@ -56,6 +56,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Where people open the Vue app. Printed in certificate QR codes, so it must be reachable
+    // from a phone: a LAN IP while testing, the real domain in production.
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:8080'),
+
     'asset_url' => env('ASSET_URL'),
 
     /*

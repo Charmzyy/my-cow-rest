@@ -36,7 +36,7 @@ class AuthController extends Controller
             ]);
 
             if (User::count() == 1) {
-                $user->role = 1; // the first account becomes the admin (officer)
+                $user->role = User::ROLE_ADMIN; // the very first account becomes the platform admin
                 $user->save();
             }
 
@@ -67,13 +67,10 @@ class AuthController extends Controller
             /** @var User $user  Auth::user() is typed as the Authenticatable interface; it's our User model */
             $user = Auth::user();
 
-            if ($user->role == 1) {
-                $roleArray = ['admin'];
-            } elseif ($user->role == 0) {
-                $roleArray = ['user'];
-            } else {
+            if (!in_array($user->role, User::ROLES, true)) {
                 return response()->json(['message' => 'Unknown account type'], 403);
             }
+            $roleArray = [$user->role];
 
             $token = $user->createToken('token')->plainTextToken;
 
@@ -86,6 +83,15 @@ class AuthController extends Controller
             report($th);
             return response()->json(['message' => 'Could not sign in.'], 500);
         }
+    }
+
+    // The signed-in user's current record + role, so the app picks up role changes
+    // (e.g. an officer application being approved) without signing out.
+    public function me(Request $request)
+    {
+        $user = $request->user();
+
+        return response()->json(['user' => $user, 'role' => [$user->role]]);
     }
 
     public function logout(Request $request)
