@@ -22,6 +22,9 @@ class Animal extends Model
         'county_id', 'sub_county', 'ward', 'village', 'latitude', 'longitude',
     ];
 
+    // Same as the column default, so a new animal's API response shows it before any reload
+    protected $attributes = ['species' => 'cattle'];
+
     protected $casts = [
         'date_of_birth' => 'date:Y-m-d',
         'weight_kg' => 'float',
