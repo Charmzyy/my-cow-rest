@@ -8,7 +8,8 @@
 # cli variant = just the `php` binary; `artisan serve` (PHP's built-in server) is our web server.
 # (fpm would need nginx in front: production-style, a later exercise.)
 # Pin further to php:8.2.<patch>-cli-bookworm for fully repeatable builds (Docker Hub → Tags).
-FROM php:8.2-cli-bookworm
+# Named "base": docker-compose.test.yml stops here (PHP + extensions + composer) and mounts the code.
+FROM php:8.2-cli-bookworm AS base
 
 # 2. System packages (Debian, via apt)
 # libzip-dev: needed to compile the PHP zip extension. unzip: Composer unpacks packages with it.
@@ -25,6 +26,9 @@ RUN docker-php-ext-install pdo_mysql zip
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
+
+# ---- Production stage (the last stage, so a plain `docker build .` / CI publish builds this) ----
+FROM base AS prod
 
 # 5a. Dependencies FIRST, code later (layer caching).
 # This layer only rebuilds when composer.json/lock change, not on every controller edit.

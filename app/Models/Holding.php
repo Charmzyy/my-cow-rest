@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 // A farm: where animals are kept. Its location is copied onto each animal (see Animal::placeAt).
 class Holding extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     public const LOCATION_FIELDS = ['county_id', 'sub_county', 'ward', 'village', 'latitude', 'longitude'];
 

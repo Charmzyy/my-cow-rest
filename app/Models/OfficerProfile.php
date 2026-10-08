@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class OfficerProfile extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     public const CADRES = ['vet' => 'Veterinary surgeon', 'para_vet' => 'Veterinary para-professional', 'extension' => 'Livestock extension officer'];
 

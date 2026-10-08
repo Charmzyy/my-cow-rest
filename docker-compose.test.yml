@@ -1,0 +1,44 @@
+# TEST compose: run the PHPUnit suite on your machine, the same way CI does.
+#   docker compose -f docker-compose.test.yml run --rm tests
+# Its own project name, MySQL and vendor volume: it never touches the dev stack or its data.
+
+name: cow-rest-test
+
+services:
+  tests:
+    # The Dockerfile's "base" stage: PHP 8.2 + pdo_mysql + composer, no app code baked in.
+    build:
+      context: .
+      target: base
+    image: cow-rest:test
+    working_dir: /app
+    volumes:
+      - .:/app                       # your current code, tests included (not copied, so no rebuild)
+      - vendor:/app/vendor           # dev dependencies live in a volume: fast, and kept out of your folder
+    # These win over anything in your local .env (Laravel never overwrites real env vars)
+    environment:
+      APP_KEY: base64:3ZXJpF73RBNn2uPcg5dTMFEGYai2lKyeos5TjHtL2DI=   # test-only key, same as CI
+      DB_CONNECTION: mysql
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: test
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+    command: sh -c "composer install --no-interaction --no-progress && php artisan test"
+
+  mysql-test:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: test
+      MYSQL_DATABASE: cowbreed_test  # phpunit.xml forces this name
+    tmpfs: /var/lib/mysql            # in memory: fast, and gone when the container stops
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ptest"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  vendor:
