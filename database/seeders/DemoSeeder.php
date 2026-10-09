@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Animal;
+use App\Models\FarmMember;
 use App\Models\Holding;
 use App\Models\OfficerProfile;
 use App\Models\User;
@@ -53,7 +54,19 @@ class DemoSeeder extends Seeder
         $animal->deleted_at = null;
         $animal->save();
 
+        // A farm worker on the demo farm: signs in with phone + PIN on the "Farm worker" tab
+        $worker = User::firstOrNew(['login_phone' => '+254733000003']);
+        $worker->fill(['fullname' => 'Demo Worker', 'phone' => '+254733000003']);
+        $worker->forceFill([
+            'role' => User::ROLE_WORKER,
+            'login_phone' => '+254733000003',
+            'password' => Hash::make(env('DEMO_WORKER_PIN', '2580')),
+        ])->save();
+        $member = FarmMember::firstOrNew(['holding_id' => $farm->id, 'user_id' => $worker->id]);
+        $member->forceFill(['holding_id' => $farm->id, 'user_id' => $worker->id, 'role' => FarmMember::WORKER])->save();
+
         $this->command?->info('Demo accounts ready: admin@ / officer@ / farmer@mycow.test (officer covers Nakuru).');
+        $this->command?->info('Demo farm worker: phone 0733 000 003, PIN DEMO_WORKER_PIN or 2580.');
         $this->command?->warn('Add photos to "Demo Daisy" as the farmer before requesting certification. Remove demo users before going live.');
     }
 

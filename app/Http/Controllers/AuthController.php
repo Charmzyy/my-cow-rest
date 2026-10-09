@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\ResetPassword;
 use App\Models\User;
+use App\Support\Phone;
 use App\Traits\HttpResponses;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -83,6 +84,30 @@ class AuthController extends Controller
             report($th);
             return response()->json(['message' => 'Could not sign in.'], 500);
         }
+    }
+
+    // Farm workers: phone + PIN instead of email + password. Same response shape as login().
+    public function loginWithPin(Request $request)
+    {
+        $data = $request->validate([
+            'phone' => 'required|string|max:20',
+            'pin' => 'required|string|max:6',
+        ]);
+
+        $phone = Phone::normalize($data['phone']);
+        $user = $phone ? User::where('login_phone', $phone)->first() : null;
+        if (!$user || !Hash::check($data['pin'], $user->password)) {
+            return response()->json(['message' => 'That phone number and PIN don’t match.'], 401);
+        }
+        if (!$user->memberships()->exists()) {
+            return response()->json(['message' => 'You’re not on any farm’s team now. Ask the farmer to add you again.'], 403);
+        }
+
+        return response()->json([
+            'user' => $user,
+            'role' => [$user->role],
+            'token' => $user->createToken('pin')->plainTextToken,
+        ], 201);
     }
 
     // The signed-in user's current record + role, so the app picks up role changes

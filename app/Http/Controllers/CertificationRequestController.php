@@ -15,7 +15,7 @@ class CertificationRequestController extends Controller
 {
     public function store(Request $request, Animal $animal, Notifier $notify)
     {
-        $this->authorize('update', $animal);
+        $this->authorize('certify', $animal);
 
         $data = $request->validate([
             'inspection_method' => ['required', Rule::in(['photo', 'visit'])],

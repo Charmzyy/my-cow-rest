@@ -7,7 +7,7 @@ use App\Models\AnimalEvent;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-// The owner's health / breeding / growth log for one animal.
+// One animal's health / breeding / growth log, kept by everyone on its farm's team.
 class AnimalEventController extends Controller
 {
     public function index(Animal $animal)
@@ -19,7 +19,7 @@ class AnimalEventController extends Controller
 
     public function store(Request $request, Animal $animal)
     {
-        $this->authorize('update', $animal);
+        $this->authorize('logEvent', $animal);
 
         $data = $request->validate([
             'type' => ['required', Rule::in(AnimalEvent::TYPES)],
@@ -42,10 +42,16 @@ class AnimalEventController extends Controller
         return response()->json(['event' => $event, 'events' => $animal->events()->get()], 201);
     }
 
-    public function destroy(Animal $animal, AnimalEvent $event)
+    public function destroy(Request $request, Animal $animal, AnimalEvent $event)
     {
-        $this->authorize('update', $animal);
         abort_unless($event->animal_id === $animal->id, 404);
+        // Owners and managers may remove any record; anyone else only what they entered themselves
+        $user = $request->user();
+        abort_unless(
+            $user->can('update', $animal) || ($event->recorded_by === $user->id && $user->can('logEvent', $animal)),
+            403,
+            'Only the farm owner or manager can remove a record someone else entered.'
+        );
 
         $event->delete();
         $this->syncWeight($animal);

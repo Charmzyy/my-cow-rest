@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\OfficerProfile;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -34,6 +35,19 @@ class UserFactory extends Factory
     public function admin()
     {
         return $this->state(['role' => User::ROLE_ADMIN]);
+    }
+
+    /** A farm worker's PIN account (no email). Add them to a farm with FarmMember. PIN: 2580. */
+    public function worker(string $phone = '+254712000001')
+    {
+        return $this->state([
+            'role' => User::ROLE_WORKER,
+            'email' => null,
+            'email_verified_at' => null,
+            'phone' => $phone,
+            'login_phone' => $phone,
+            'password' => Hash::make('2580'),
+        ]);
     }
 
     /** A verified officer: role officer with an approved profile, as after admin approval. */

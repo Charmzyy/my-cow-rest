@@ -6,16 +6,20 @@ use App\Models\Holding;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-// A farmer's farms. Only the owner sees or edits them; coordinates are never public.
+// Farms. Everyone on a farm's team sees it (with their role); owners and managers edit it,
+// only the owner removes it. Coordinates are never public.
 class HoldingController extends Controller
 {
     public function index(Request $request)
     {
-        $holdings = Holding::where('owner_id', $request->user()->id)
+        $roles = $request->user()->memberships()->pluck('role', 'holding_id');
+
+        $holdings = Holding::whereIn('id', $roles->keys())
             ->with('county:id,name')
             ->withCount('animals')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->each(fn (Holding $h) => $h->setAttribute('my_role', $roles[$h->id]));
 
         return response()->json(['holdings' => $holdings]);
     }
@@ -24,24 +28,24 @@ class HoldingController extends Controller
     {
         $holding = new Holding($request->validate($this->rules()));
         $holding->owner_id = $request->user()->id;
-        $holding->save();
+        $holding->save();   // also makes the creator its owner member (Holding::booted)
 
-        return response()->json(['holding' => $holding->load('county:id,name')->loadCount('animals')], 201);
+        return response()->json(['holding' => $this->present($holding, 'owner')], 201);
     }
 
     public function update(Request $request, Holding $holding)
     {
-        $this->authorizeOwner($request, $holding);
+        $this->authorizeFarm($request, $holding, 'farm.update');
 
         $holding->update($request->validate($this->rules()));
         $holding->syncAnimals();
 
-        return response()->json(['holding' => $holding->load('county:id,name')->loadCount('animals')]);
+        return response()->json(['holding' => $this->present($holding, $holding->roleOf($request->user()))]);
     }
 
     public function destroy(Request $request, Holding $holding)
     {
-        $this->authorizeOwner($request, $holding);
+        $this->authorizeFarm($request, $holding, 'farm.delete');
         abort_if($holding->animals()->exists(), 422, 'Move this farm’s animals to another farm before removing it.');
 
         $holding->delete();
@@ -49,9 +53,14 @@ class HoldingController extends Controller
         return response()->json(['message' => 'Farm removed']);
     }
 
-    private function authorizeOwner(Request $request, Holding $holding): void
+    private function present(Holding $holding, ?string $role): Holding
     {
-        abort_unless($holding->owner_id === $request->user()->id, 403, 'Not Authorized');
+        return $holding->load('county:id,name')->loadCount('animals')->setAttribute('my_role', $role);
+    }
+
+    private function authorizeFarm(Request $request, Holding $holding, string $ability): void
+    {
+        abort_unless($holding->allows($request->user(), $ability), 403, 'Not Authorized');
     }
 
     private function rules(): array

@@ -9,6 +9,7 @@ use App\Http\Controllers\AnimalEventController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\CertificationRequestController;
+use App\Http\Controllers\FarmMemberController;
 use App\Http\Controllers\HoldingController;
 use App\Http\Controllers\OfficerApplicationController;
 use App\Http\Controllers\OfficerReviewController;
@@ -35,6 +36,8 @@ Route::controller(AuthController::class)->group(function () {
     Route::post('register', 'register')->middleware('throttle:5,1');
     Route::post('forgot/password', 'forgot')->middleware('throttle:5,1');
     Route::post('reset/password', 'reset')->middleware('throttle:10,1');
+    // Farm workers: phone + PIN. A 4-digit PIN is guessable, so this is throttled hardest.
+    Route::post('login/pin', 'loginWithPin')->middleware('throttle:5,1');
 });
 
 
@@ -95,29 +98,41 @@ Route::middleware(['auth:sanctum', 'role:officer'])->prefix('officer')->group(fu
 // Reference data for forms
 Route::get('counties', fn () => \App\Models\County::orderBy('name')->get());
 
-// Farmers
-Route::middleware(['auth:sanctum', 'role:farmer'])->group(function () {
-    Route::post('mypost', [UserPostController::class, 'store']);   // free quick breed check
-
-    // Farms (where animals are kept; owner only)
-    Route::get('holdings', [HoldingController::class, 'index']);
-    Route::post('holdings', [HoldingController::class, 'store']);
-    Route::put('holdings/{holding}', [HoldingController::class, 'update']);
-    Route::delete('holdings/{holding}', [HoldingController::class, 'destroy']);
-
-    // Herd. Ownership is checked per animal by AnimalPolicy.
+// Anyone on a farm's team: farmers (owners / managers) and farm workers.
+// What each may do on a given farm is checked per farm (FarmMember::ABILITIES via AnimalPolicy / Holding::allows).
+Route::middleware(['auth:sanctum', 'role:farmer,worker'])->group(function () {
+    Route::get('holdings', [HoldingController::class, 'index']);            // the farms I'm on, with my role
     Route::get('animals', [AnimalController::class, 'index']);
-    Route::post('animals', [AnimalController::class, 'store']);
     Route::get('animals/{animal}', [AnimalController::class, 'show']);
-    Route::put('animals/{animal}', [AnimalController::class, 'update']);
-    Route::delete('animals/{animal}', [AnimalController::class, 'destroy']);
-    Route::post('animals/{animal}/photos', [AnimalController::class, 'uploadPhoto']);
-    Route::delete('animals/{animal}/photos/{photo}', [AnimalController::class, 'deletePhoto']);
 
     // Health / breeding / growth records
     Route::get('animals/{animal}/events', [AnimalEventController::class, 'index']);
     Route::post('animals/{animal}/events', [AnimalEventController::class, 'store']);
     Route::delete('animals/{animal}/events/{event}', [AnimalEventController::class, 'destroy']);
+});
+
+// Farmers (full accounts)
+Route::middleware(['auth:sanctum', 'role:farmer'])->group(function () {
+    Route::post('mypost', [UserPostController::class, 'store']);   // free quick breed check
+
+    // Farms (where animals are kept)
+    Route::post('holdings', [HoldingController::class, 'store']);
+    Route::put('holdings/{holding}', [HoldingController::class, 'update']);
+    Route::delete('holdings/{holding}', [HoldingController::class, 'destroy']);
+
+    // A farm's team
+    Route::get('holdings/{holding}/members', [FarmMemberController::class, 'index']);
+    Route::post('holdings/{holding}/workers', [FarmMemberController::class, 'storeWorker']);
+    Route::post('holdings/{holding}/managers', [FarmMemberController::class, 'storeManager']);
+    Route::put('holdings/{holding}/members/{member}/pin', [FarmMemberController::class, 'resetPin']);
+    Route::delete('holdings/{holding}/members/{member}', [FarmMemberController::class, 'destroy']);
+
+    // Herd
+    Route::post('animals', [AnimalController::class, 'store']);
+    Route::put('animals/{animal}', [AnimalController::class, 'update']);
+    Route::delete('animals/{animal}', [AnimalController::class, 'destroy']);
+    Route::post('animals/{animal}/photos', [AnimalController::class, 'uploadPhoto']);
+    Route::delete('animals/{animal}/photos/{photo}', [AnimalController::class, 'deletePhoto']);
 
     // Certification requests for the farmer's own animals
     Route::post('animals/{animal}/certification-requests', [CertificationRequestController::class, 'store']);

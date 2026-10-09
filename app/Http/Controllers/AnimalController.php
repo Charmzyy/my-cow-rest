@@ -5,17 +5,27 @@ namespace App\Http\Controllers;
 use App\Models\Animal;
 use App\Models\AnimalPhoto;
 use App\Models\Holding;
+use App\Policies\AnimalPolicy;
 use App\Services\BreedPredictor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
-// A farmer's herd: register animals, edit their records and attach guided photos.
+// A farm's herd: register animals, edit their records and attach guided photos.
+// Who may do what comes from their role on the animal's farm (AnimalPolicy / FarmMember::ABILITIES).
 class AnimalController extends Controller
 {
+    /** Every animal on the farms the person works on (optionally one farm: ?holding_id=). */
     public function index(Request $request)
     {
-        $animals = $request->user()->animals()
+        $user = $request->user();
+        $farmIds = $user->holdingIdsWhere('herd.view');
+
+        $animals = Animal::query()
+            ->where(fn ($q) => $q->whereIn('holding_id', $farmIds)
+                // older records not on a farm yet: the owner's only
+                ->orWhere(fn ($q) => $q->whereNull('holding_id')->where('owner_id', $user->id)))
+            ->when($request->query('holding_id'), fn ($q, $id) => $q->where('holding_id', $id))
             ->with(['county:id,name', 'holding:id,name', 'photos', 'latestRequest.officer:id,fullname', 'latestRequest.certificate'])
             ->latest()
             ->get();
@@ -23,11 +33,15 @@ class AnimalController extends Controller
         return response()->json(['animals' => $animals]);
     }
 
-    public function show(Animal $animal)
+    public function show(Request $request, Animal $animal)
     {
         $this->authorize('view', $animal);
 
-        return response()->json(['animal' => $animal->load(['county:id,name', 'holding:id,name', 'photos', 'latestRequest.officer:id,fullname', 'latestRequest.certificate'])]);
+        return response()->json([
+            'animal' => $animal->load(['county:id,name', 'holding:id,name', 'photos', 'latestRequest.officer:id,fullname', 'latestRequest.certificate']),
+            // which actions this person may take, so the app only shows those buttons
+            'can' => (new AnimalPolicy())->abilities($request->user(), $animal),
+        ]);
     }
 
     public function store(Request $request)
@@ -148,14 +162,21 @@ class AnimalController extends Controller
         return response()->json(['animal' => $animal->fresh()->load(['county:id,name', 'holding:id,name', 'photos', 'latestRequest.officer:id,fullname', 'latestRequest.certificate'])]);
     }
 
-    /** With a farm chosen, the animal takes the farm's location (the request's location fields are ignored). */
+    /**
+     * With a farm chosen, the animal takes the farm's location (the request's location fields are ignored)
+     * and belongs to the farm's owner, also when a manager registers it.
+     */
     private function placeOnFarm(Request $request, Animal $animal, array $data): void
     {
         if (empty($data['holding_id'])) {
             return;
         }
         $holding = Holding::find($data['holding_id']);
-        abort_unless($holding && $holding->owner_id === $request->user()->id, 422, 'Choose one of your own farms.');
+        abort_unless($holding && $holding->allows($request->user(), 'animal.manage'), 422, 'Choose a farm you manage.');
+        // Moving between farms never changes who owns the animal
+        abort_if($animal->exists && $holding->owner_id !== $animal->owner_id, 422, 'An animal can only move between farms with the same owner.');
+
+        $animal->owner_id = $holding->owner_id;
         $animal->placeAt($holding);
     }
 

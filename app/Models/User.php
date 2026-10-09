@@ -18,7 +18,8 @@ class User extends Authenticatable
     public const ROLE_OFFICER = 'officer';     // verified vet / extension officer: certifies animals
     public const ROLE_ORG_ADMIN = 'org_admin'; // runs a cooperative / organisation account
     public const ROLE_ADMIN = 'admin';         // platform staff
-    public const ROLES = [self::ROLE_FARMER, self::ROLE_OFFICER, self::ROLE_ORG_ADMIN, self::ROLE_ADMIN];
+    public const ROLE_WORKER = 'worker';       // farm hand: phone + PIN account, works only on farms that added them
+    public const ROLES = [self::ROLE_FARMER, self::ROLE_OFFICER, self::ROLE_ORG_ADMIN, self::ROLE_ADMIN, self::ROLE_WORKER];
 
     protected $primarykey = 'id';
     public $incrementing = false;
@@ -81,6 +82,18 @@ class User extends Authenticatable
   public function animals()
   {
     return $this->hasMany(Animal::class, 'owner_id');
+  }
+
+  /** This person's roles on farms (their own, and any they work on). */
+  public function memberships()
+  {
+    return $this->hasMany(FarmMember::class);
+  }
+
+  /** Ids of the farms where this person's role grants the ability (see FarmMember::ABILITIES). */
+  public function holdingIdsWhere(string $ability)
+  {
+    return $this->memberships()->whereIn('role', FarmMember::ABILITIES[$ability])->pluck('holding_id');
   }
 
   public function officerProfile()
