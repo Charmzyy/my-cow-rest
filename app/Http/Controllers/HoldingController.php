@@ -26,7 +26,7 @@ class HoldingController extends Controller
 
     public function store(Request $request)
     {
-        $holding = new Holding($request->validate($this->rules()));
+        $holding = new Holding(array_filter($request->validate($this->rules()), fn ($v) => $v !== null));
         $holding->owner_id = $request->user()->id;
         $holding->save();   // also makes the creator its owner member (Holding::booted)
 
@@ -37,7 +37,9 @@ class HoldingController extends Controller
     {
         $this->authorizeFarm($request, $holding, 'farm.update');
 
-        $holding->update($request->validate($this->rules()));
+        $data = $request->validate($this->rules());
+        $data['milkings_per_day'] ??= $holding->milkings_per_day;   // older clients don't send it
+        $holding->update($data);
         $holding->syncAnimals();
 
         return response()->json(['holding' => $this->present($holding, $holding->roleOf($request->user()))]);
@@ -78,6 +80,7 @@ class HoldingController extends Controller
             'longitude' => ['nullable', 'numeric', 'between:33,42.5', 'required_with:latitude'],
             'location_accuracy_m' => ['nullable', 'integer', 'between:0,65000'],
             'location_source' => ['nullable', Rule::in(['gps', 'map'])],
+            'milkings_per_day' => ['nullable', 'integer', Rule::in(array_keys(Holding::SESSIONS))],
         ];
     }
 }

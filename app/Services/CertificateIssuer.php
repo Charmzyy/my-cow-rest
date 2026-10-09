@@ -6,8 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Certificate;
 use App\Models\CertificationRequest;
 use App\Models\OfficerProfile;
-use BaconQrCode\Common\ErrorCorrectionLevel;
-use BaconQrCode\Encoder\Encoder;
+use App\Support\Qr;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -15,9 +14,6 @@ use Illuminate\Support\Facades\File;
 // Turns an approved certification request into a numbered certificate, and renders its PDF.
 class CertificateIssuer
 {
-    // No 0/O or 1/I/L: the code may be read out or typed from paper
-    private const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
     /** Issue the certificate for an approved request. Safe to call twice: returns the existing one. */
     public function issue(CertificationRequest $request): Certificate
     {
@@ -135,34 +131,9 @@ class CertificateIssuer
         return Pdf::loadView('certificate', [
             'c' => $certificate,
             's' => $certificate->snapshot,
-            'qr' => $this->qrRuns($certificate->verify_url),
+            'qr' => Qr::runs($certificate->verify_url),
             'photo' => $this->photoDataUri($certificate),
         ])->setPaper('a4');
-    }
-
-    /**
-     * The QR code as rows of dark runs: [[x, y, length], ...] plus its size in modules.
-     * Drawn as plain boxes in the PDF, so no image library (GD/Imagick) is needed in the container.
-     */
-    private function qrRuns(string $text): array
-    {
-        $matrix = Encoder::encode($text, ErrorCorrectionLevel::M())->getMatrix();
-        $size = $matrix->getWidth();
-        $runs = [];
-        for ($y = 0; $y < $size; $y++) {
-            for ($x = 0; $x < $size; $x++) {
-                if ($matrix->get($x, $y) !== 1) {
-                    continue;
-                }
-                $start = $x;
-                while ($x + 1 < $size && $matrix->get($x + 1, $y) === 1) {
-                    $x++;
-                }
-                $runs[] = [$start, $y, $x - $start + 1];
-            }
-        }
-
-        return ['size' => $size, 'runs' => $runs];
     }
 
     /** Side photo embedded in the PDF. JPEG only: dompdf needs the GD extension for PNG. */
@@ -180,10 +151,7 @@ class CertificateIssuer
     private function newCode(): string
     {
         do {
-            $code = '';
-            for ($i = 0; $i < 10; $i++) {
-                $code .= self::CODE_ALPHABET[random_int(0, strlen(self::CODE_ALPHABET) - 1)];
-            }
+            $code = Qr::randomCode(10);
         } while (Certificate::where('verification_code', $code)->exists());
 
         return $code;

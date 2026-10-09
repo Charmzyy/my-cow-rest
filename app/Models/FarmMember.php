@@ -19,7 +19,9 @@ class FarmMember extends Model
 
     public const ABILITIES = [
         'herd.view' => [self::OWNER, self::MANAGER, self::WORKER, self::VET],
-        'events.write' => [self::OWNER, self::MANAGER, self::WORKER, self::VET],   // health, milk, breeding records
+        'events.write' => [self::OWNER, self::MANAGER, self::WORKER, self::VET],   // health, breeding, weight records
+        'milk.write' => [self::OWNER, self::MANAGER, self::WORKER],                // milkings, and where the milk went
+        'sales.manage' => [self::OWNER, self::MANAGER],                            // buyers + prices, anyone's sales entries
         'animal.manage' => [self::OWNER, self::MANAGER],                           // add, edit, remove animals + photos
         'farm.update' => [self::OWNER, self::MANAGER],
         'team.manage' => [self::OWNER, self::MANAGER],                             // managers: workers only (see FarmMemberController)

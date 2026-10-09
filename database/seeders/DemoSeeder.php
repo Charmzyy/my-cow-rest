@@ -3,7 +3,12 @@
 namespace Database\Seeders;
 
 use App\Models\Animal;
+use App\Models\AnimalEvent;
 use App\Models\FarmMember;
+use App\Models\MilkLog;
+use App\Services\LactationBook;
+use App\Services\MilkLedger;
+use App\Support\FarmClock;
 use App\Models\Holding;
 use App\Models\OfficerProfile;
 use App\Models\User;
@@ -64,6 +69,21 @@ class DemoSeeder extends Seeder
         ])->save();
         $member = FarmMember::firstOrNew(['holding_id' => $farm->id, 'user_id' => $worker->id]);
         $member->forceFill(['holding_id' => $farm->id, 'user_id' => $worker->id, 'role' => FarmMember::WORKER])->save();
+
+        // Daisy calved ~4 months ago and has two weeks of milkings, so the farm's charts have something to show
+        if (!$animal->events()->where('type', 'calving')->exists()) {
+            $calving = new AnimalEvent(['type' => 'calving', 'event_date' => FarmClock::now()->subDays(120)->toDateString(), 'details' => 'Heifer calf']);
+            $calving->forceFill(['animal_id' => $animal->id, 'recorded_by' => $farmer->id])->save();
+            app(LactationBook::class)->rebuild($animal);
+        }
+        if (!MilkLog::where('animal_id', $animal->id)->exists()) {
+            $ledger = app(MilkLedger::class);
+            for ($d = 14; $d >= 1; $d--) {
+                $day = FarmClock::now()->subDays($d)->toDateString();
+                $ledger->recordSession($farm, $day, 'am', [['animal_id' => $animal->id, 'litres' => 9 + ($d % 3) * 0.5]], $farmer);
+                $ledger->recordSession($farm, $day, 'pm', [['animal_id' => $animal->id, 'litres' => 6.5 + ($d % 2)]], $farmer);
+            }
+        }
 
         $this->command?->info('Demo accounts ready: admin@ / officer@ / farmer@mycow.test (officer covers Nakuru).');
         $this->command?->info('Demo farm worker: phone 0733 000 003, PIN DEMO_WORKER_PIN or 2580.');

@@ -11,8 +11,11 @@ use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\CertificationRequestController;
 use App\Http\Controllers\FarmMemberController;
 use App\Http\Controllers\HoldingController;
+use App\Http\Controllers\MilkController;
+use App\Http\Controllers\MilkDeliveryController;
 use App\Http\Controllers\OfficerApplicationController;
 use App\Http\Controllers\OfficerReviewController;
+use App\Http\Controllers\TagController;
 use App\Http\Controllers\UserPostController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -109,6 +112,25 @@ Route::middleware(['auth:sanctum', 'role:farmer,worker'])->group(function () {
     Route::get('animals/{animal}/events', [AnimalEventController::class, 'index']);
     Route::post('animals/{animal}/events', [AnimalEventController::class, 'store']);
     Route::delete('animals/{animal}/events/{event}', [AnimalEventController::class, 'destroy']);
+
+    // Milk: the session sheet, saving it, and the numbers behind the charts
+    Route::get('holdings/{holding}/milk/session', [MilkController::class, 'session']);
+    Route::post('holdings/{holding}/milk/session', [MilkController::class, 'record']);
+    Route::get('holdings/{holding}/milk/summary', [MilkController::class, 'summary']);
+    Route::get('animals/{animal}/milk', [MilkController::class, 'cow']);
+
+    // Where the milk went, and who buys it
+    Route::get('holdings/{holding}/milk/deliveries', [MilkDeliveryController::class, 'index']);
+    Route::post('holdings/{holding}/milk/deliveries', [MilkDeliveryController::class, 'store']);
+    Route::put('holdings/{holding}/milk/deliveries/{delivery}', [MilkDeliveryController::class, 'update']);
+    Route::delete('holdings/{holding}/milk/deliveries/{delivery}', [MilkDeliveryController::class, 'destroy']);
+    Route::get('holdings/{holding}/milk/buyers', [MilkDeliveryController::class, 'buyers']);
+    Route::post('holdings/{holding}/milk/buyers', [MilkDeliveryController::class, 'storeBuyer']);
+    Route::put('holdings/{holding}/milk/buyers/{buyer}', [MilkDeliveryController::class, 'updateBuyer']);
+
+    // Ear-tag QR codes: printable sticker sheet, and scanned code -> cow
+    Route::get('holdings/{holding}/tags.pdf', [TagController::class, 'sheet']);
+    Route::get('tags/{code}', [TagController::class, 'resolve'])->middleware('throttle:60,1');
 });
 
 // Farmers (full accounts)

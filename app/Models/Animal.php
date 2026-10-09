@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Support\Qr;
 
 class Animal extends Model
 {
@@ -35,9 +36,37 @@ class Animal extends Model
         'ai_confidence' => 'float',
     ];
 
+    protected static function booted()
+    {
+        // Every animal gets a short code for its ear-tag QR sticker
+        static::creating(function (Animal $animal) {
+            while (!$animal->qr_code || static::withTrashed()->where('qr_code', $animal->qr_code)->exists()) {
+                $animal->qr_code = Qr::randomCode(8);
+            }
+        });
+    }
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function lactations()
+    {
+        return $this->hasMany(Lactation::class)->orderBy('calved_on');
+    }
+
+    public function currentLactation()
+    {
+        return $this->hasOne(Lactation::class)->latestOfMany('calved_on');
+    }
+
+    /** For the milking list: 'milking' (calved, not dried off), 'dry', or 'unknown' (no calving recorded yet). */
+    public function milkStatus(): string
+    {
+        $current = $this->currentLactation;
+
+        return !$current ? 'unknown' : ($current->isOpen() ? 'milking' : 'dry');
     }
 
     public function county()

@@ -15,8 +15,15 @@ class Holding extends Model
 
     protected $fillable = [
         'name', 'county_id', 'sub_county', 'ward', 'village',
-        'latitude', 'longitude', 'location_accuracy_m', 'location_source',
+        'latitude', 'longitude', 'location_accuracy_m', 'location_source', 'milkings_per_day',
     ];
+
+    // The milkings a farm records, by how many times a day it milks
+    public const SESSIONS = [1 => ['am'], 2 => ['am', 'pm'], 3 => ['am', 'midday', 'pm']];
+
+    // Same as the column default, so a new farm's API response shows it before any reload
+    protected $attributes = ['milkings_per_day' => 2];
+
     protected $casts = ['latitude' => 'float', 'longitude' => 'float'];
 
     /** @var array<string, ?string> user id => role on this farm, cached per request */
@@ -29,6 +36,12 @@ class Holding extends Model
             $member = new FarmMember(['role' => FarmMember::OWNER]);
             $member->forceFill(['holding_id' => $holding->id, 'user_id' => $holding->owner_id])->save();
         });
+    }
+
+    /** This farm's milking sessions, e.g. ['am', 'pm']. */
+    public function sessions(): array
+    {
+        return self::SESSIONS[$this->milkings_per_day ?? 2] ?? self::SESSIONS[2];
     }
 
     public function members()
