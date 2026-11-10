@@ -13,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // One workspace per request (set by the `org` middleware)
+        $this->app->singleton(\App\Support\CurrentOrganisation::class);
     }
 
     /**

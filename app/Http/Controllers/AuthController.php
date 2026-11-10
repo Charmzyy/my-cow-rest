@@ -116,7 +116,11 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        return response()->json(['user' => $user, 'role' => [$user->role]]);
+        return response()->json([
+            'user' => $user,
+            'role' => [$user->role],
+            'organisations' => OrganisationController::listFor($user),   // workspaces for the switcher
+        ]);
     }
 
     public function logout(Request $request)

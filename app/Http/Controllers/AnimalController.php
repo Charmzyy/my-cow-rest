@@ -7,6 +7,7 @@ use App\Models\AnimalPhoto;
 use App\Models\Holding;
 use App\Policies\AnimalPolicy;
 use App\Services\BreedPredictor;
+use App\Support\Withdrawal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -41,6 +42,8 @@ class AnimalController extends Controller
             'animal' => $animal->load(['county:id,name', 'holding:id,name', 'photos', 'latestRequest.officer:id,fullname', 'latestRequest.certificate']),
             // which actions this person may take, so the app only shows those buttons
             'can' => (new AnimalPolicy())->abilities($request->user(), $animal),
+            // milk / meat not to be sold yet because of a treatment (null = nothing pending)
+            'withdrawal' => Withdrawal::statusFor($animal),
         ]);
     }
 

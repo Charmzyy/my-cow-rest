@@ -85,6 +85,24 @@ class DemoSeeder extends Seeder
             }
         }
 
+        // Health: a deworming due again soon, and yesterday's mastitis treatment, so her milk shows as locked
+        if (!$animal->events()->whereIn('type', AnimalEvent::HEALTH_TYPES)->exists()) {
+            $deworm = new AnimalEvent([
+                'type' => 'deworming', 'event_date' => FarmClock::now()->subDays(80)->toDateString(),
+                'product' => 'Albendazole 10%', 'dose' => '30 ml oral',
+                'next_due_on' => FarmClock::now()->addDays(10)->toDateString(),
+            ]);
+            $deworm->forceFill(['animal_id' => $animal->id, 'recorded_by' => $farmer->id])->save();
+
+            $treatment = new AnimalEvent([
+                'type' => 'treatment', 'event_date' => FarmClock::now()->subDay()->toDateString(),
+                'details' => 'Mastitis, front left quarter', 'product' => 'Penstrep', 'dose' => '20 ml IM',
+                'milk_withdrawal_hours' => 72, 'meat_withdrawal_days' => 14, 'given_by' => 'Dr. Demo Officer',
+            ]);
+            $treatment->forceFill(['animal_id' => $animal->id, 'recorded_by' => $officer->id])->save();
+            app(MilkLedger::class)->applyWithdrawal($treatment);
+        }
+
         $this->command?->info('Demo accounts ready: admin@ / officer@ / farmer@mycow.test (officer covers Nakuru).');
         $this->command?->info('Demo farm worker: phone 0733 000 003, PIN DEMO_WORKER_PIN or 2580.');
         $this->command?->warn('Add photos to "Demo Daisy" as the farmer before requesting certification. Remove demo users before going live.');

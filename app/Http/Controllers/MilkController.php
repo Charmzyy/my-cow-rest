@@ -8,6 +8,7 @@ use App\Models\MilkDelivery;
 use App\Models\MilkLog;
 use App\Services\MilkLedger;
 use App\Support\FarmClock;
+use App\Support\Withdrawal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -100,7 +101,7 @@ class MilkController extends Controller
             ]),
             'lactations' => $lactations,
             'recent' => MilkLog::where('animal_id', $animal->id)->orderByDesc('milked_on')->orderByDesc('session')->limit(10)
-                ->get(['id', 'milked_on', 'session', 'litres', 'discarded']),
+                ->get(['id', 'milked_on', 'session', 'litres', 'discarded', 'withdrawal_event_id']),
         ]);
     }
 
@@ -184,9 +185,13 @@ class MilkController extends Controller
             ->where('milked_on', '<', $day)->where('milked_on', '>=', Carbon::parse($day)->subDays(14)->toDateString())
             ->orderBy('milked_on')->get(['animal_id', 'litres'])->groupBy('animal_id')->map(fn ($g) => $g->last()->litres);
 
+        // Cows under a treatment's milk withdrawal that day: their milk is saved as discarded (MilkLedger)
+        $blocked = Withdrawal::blocking($ids, $day);
+
         $order = ['milking' => 0, 'unknown' => 1, 'dry' => 2];
-        $rows = $cows->map(function (Animal $a) use ($logs, $last) {
+        $rows = $cows->map(function (Animal $a) use ($logs, $last, $blocked) {
             $log = $logs[$a->id] ?? null;
+            $treatment = $blocked[$a->id] ?? null;
 
             return [
                 'id' => $a->id,
@@ -197,6 +202,7 @@ class MilkController extends Controller
                 'days_in_milk' => $a->currentLactation?->isOpen() ? $a->currentLactation->daysInMilk() : null,
                 'last_litres' => $last[$a->id] ?? null,
                 'log' => $log ? ['id' => $log->id, 'litres' => $log->litres, 'discarded' => $log->discarded] : null,
+                'withdrawal' => $treatment ? ['until' => $treatment->milk_clear_on->toDateString(), 'product' => $treatment->product ?: $treatment->details] : null,
             ];
         })->sortBy(fn ($r) => $order[$r['status']])->values();
 

@@ -10,11 +10,13 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\CertificationRequestController;
 use App\Http\Controllers\FarmMemberController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HoldingController;
 use App\Http\Controllers\MilkController;
 use App\Http\Controllers\MilkDeliveryController;
 use App\Http\Controllers\OfficerApplicationController;
 use App\Http\Controllers\OfficerReviewController;
+use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\UserPostController;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +58,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Owner, certifying officer or admin (checked in the controller)
     Route::get('certificates/{certificate}/pdf', [CertificateController::class, 'pdf']);
+
+    // Organisations (workspaces): mine, start one, and run its people (owner/admin, checked in the controller)
+    Route::get('orgs', [OrganisationController::class, 'index']);
+    Route::post('orgs', [OrganisationController::class, 'store'])->middleware('throttle:10,1');
+    Route::put('orgs/{organisation}', [OrganisationController::class, 'update']);
+    Route::get('orgs/{organisation}/members', [OrganisationController::class, 'members']);
+    Route::post('orgs/{organisation}/members', [OrganisationController::class, 'addMember']);
+    Route::put('orgs/{organisation}/members/{member}', [OrganisationController::class, 'updateMember']);
+    Route::delete('orgs/{organisation}/members/{member}', [OrganisationController::class, 'removeMember']);
 });
 
 
@@ -103,7 +114,8 @@ Route::get('counties', fn () => \App\Models\County::orderBy('name')->get());
 
 // Anyone on a farm's team: farmers (owners / managers) and farm workers.
 // What each may do on a given farm is checked per farm (FarmMember::ABILITIES via AnimalPolicy / Holding::allows).
-Route::middleware(['auth:sanctum', 'role:farmer,worker'])->group(function () {
+// `org`: an X-Organisation header limits everything to that workspace's farms and animals.
+Route::middleware(['auth:sanctum', 'role:farmer,worker', 'org'])->group(function () {
     Route::get('holdings', [HoldingController::class, 'index']);            // the farms I'm on, with my role
     Route::get('animals', [AnimalController::class, 'index']);
     Route::get('animals/{animal}', [AnimalController::class, 'show']);
@@ -112,6 +124,7 @@ Route::middleware(['auth:sanctum', 'role:farmer,worker'])->group(function () {
     Route::get('animals/{animal}/events', [AnimalEventController::class, 'index']);
     Route::post('animals/{animal}/events', [AnimalEventController::class, 'store']);
     Route::delete('animals/{animal}/events/{event}', [AnimalEventController::class, 'destroy']);
+    Route::get('holdings/{holding}/health', [HealthController::class, 'farm']);   // withdrawals + doses due
 
     // Milk: the session sheet, saving it, and the numbers behind the charts
     Route::get('holdings/{holding}/milk/session', [MilkController::class, 'session']);
@@ -134,13 +147,14 @@ Route::middleware(['auth:sanctum', 'role:farmer,worker'])->group(function () {
 });
 
 // Farmers (full accounts)
-Route::middleware(['auth:sanctum', 'role:farmer'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:farmer', 'org'])->group(function () {
     Route::post('mypost', [UserPostController::class, 'store']);   // free quick breed check
 
     // Farms (where animals are kept)
     Route::post('holdings', [HoldingController::class, 'store']);
     Route::put('holdings/{holding}', [HoldingController::class, 'update']);
     Route::delete('holdings/{holding}', [HoldingController::class, 'destroy']);
+    Route::put('holdings/{holding}/organisation', [OrganisationController::class, 'moveFarm']);
 
     // A farm's team
     Route::get('holdings/{holding}/members', [FarmMemberController::class, 'index']);

@@ -31,6 +31,30 @@ class FarmMember extends Model
 
     protected $fillable = ['role'];
 
+    protected static function booted()
+    {
+        // Being on a farm's team puts you in its organisation (as a plain member)...
+        static::created(function (FarmMember $member) {
+            $org = $member->holding?->organisation;
+            $user = $member->user;
+            if ($org && $user) {
+                $org->addMember($user);
+            }
+        });
+
+        // ...and leaving your last farm there takes you out again (owners and admins stay)
+        static::deleted(function (FarmMember $member) {
+            $orgId = Holding::withoutGlobalScopes()->whereKey($member->holding_id)->value('organisation_id');
+            $stillThere = static::where('user_id', $member->user_id)
+                ->whereIn('holding_id', Holding::withoutGlobalScopes()->where('organisation_id', $orgId)->select('id'))
+                ->exists();
+            if ($orgId && !$stillThere) {
+                OrganisationMember::where('organisation_id', $orgId)->where('user_id', $member->user_id)
+                    ->where('role', OrganisationMember::MEMBER)->delete();
+            }
+        });
+    }
+
     public static function allows(?string $role, string $ability): bool
     {
         return $role !== null && in_array($role, self::ABILITIES[$ability] ?? [], true);

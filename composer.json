@@ -9,7 +9,6 @@
         "bacon/bacon-qr-code": "~2.0",
         "barryvdh/laravel-dompdf": "~3.0",
         "doctrine/dbal": "^3.6",
-        "fruitcake/laravel-cors": "^3.0",
         "guzzlehttp/guzzle": "^7.2",
         "illuminate/mail": "^9.51",
         "laravel/framework": "^9.19",

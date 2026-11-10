@@ -199,9 +199,7 @@ return [
         // App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
-        Fruitcake\Cors\CorsServiceProvider::class,
-
-
+        // CORS: built into Laravel 9.2+ (HandleCors in Kernel, settings in config/cors.php)
     ],
 
     /*

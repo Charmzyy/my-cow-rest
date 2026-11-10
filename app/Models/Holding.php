@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganisation;
+use App\Support\CurrentOrganisation;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 // A farm: where animals are kept. Its location is copied onto each animal (see Animal::placeAt).
+// It sits in one organisation (workspace): the one chosen for the request, else the owner's own.
 class Holding extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToOrganisation, HasFactory, HasUuids;
 
     public const LOCATION_FIELDS = ['county_id', 'sub_county', 'ward', 'village', 'latitude', 'longitude'];
 
@@ -31,6 +34,11 @@ class Holding extends Model
 
     protected static function booted()
     {
+        static::creating(function (Holding $holding) {
+            $holding->organisation_id ??= app(CurrentOrganisation::class)->id()
+                ?? Organisation::personalFor(User::findOrFail($holding->owner_id))->id;
+        });
+
         // Whoever creates a farm is its owner member, however it's created (API, seeder, factory)
         static::created(function (Holding $holding) {
             $member = new FarmMember(['role' => FarmMember::OWNER]);
@@ -74,6 +82,17 @@ class Holding extends Model
     public function animals()
     {
         return $this->hasMany(Animal::class);
+    }
+
+    /** Moves the farm, its animals and its team into another organisation. */
+    public function moveTo(Organisation $organisation): void
+    {
+        $this->organisation_id = $organisation->id;
+        $this->save();
+        Animal::withoutGlobalScopes()->where('holding_id', $this->id)->update(['organisation_id' => $organisation->id]);
+        foreach ($this->members()->with('user')->get() as $member) {
+            $organisation->addMember($member->user);
+        }
     }
 
     /** After the farm moves or is corrected, its animals follow. */

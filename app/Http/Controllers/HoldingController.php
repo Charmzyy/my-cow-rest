@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Holding;
+use App\Models\Organisation;
+use App\Support\CurrentOrganisation;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -24,8 +26,13 @@ class HoldingController extends Controller
         return response()->json(['holdings' => $holdings]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CurrentOrganisation $current)
     {
+        // A new farm lands in the chosen workspace, so only the people who run it may add one there
+        if ($current->id()) {
+            abort_unless(Organisation::findOrFail($current->id())->isManagedBy($request->user()), 403, 'Only the organisation’s owner or admins can add farms to it.');
+        }
+
         $holding = new Holding(array_filter($request->validate($this->rules()), fn ($v) => $v !== null));
         $holding->owner_id = $request->user()->id;
         $holding->save();   // also makes the creator its owner member (Holding::booted)

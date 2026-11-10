@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Concerns\BelongsToOrganisation;
+use App\Support\CurrentOrganisation;
 use App\Support\Qr;
 
 class Animal extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use BelongsToOrganisation, HasFactory, HasUuids, SoftDeletes;
 
     // Everything the owner may edit. owner_id, status and the ai_* summary are set by the app only.
     public const SPECIES = ['cattle', 'goat', 'sheep', 'pig', 'camel'];
@@ -40,6 +42,11 @@ class Animal extends Model
     {
         // Every animal gets a short code for its ear-tag QR sticker
         static::creating(function (Animal $animal) {
+            // Same workspace as its farm (placeAt), else the request's, else the owner's own
+            $animal->organisation_id ??= ($animal->holding_id ? Holding::withoutGlobalScopes()->whereKey($animal->holding_id)->value('organisation_id') : null)
+                ?? app(CurrentOrganisation::class)->id()
+                ?? ($animal->owner_id ? Organisation::personalFor(User::findOrFail($animal->owner_id))->id : null);
+
             while (!$animal->qr_code || static::withTrashed()->where('qr_code', $animal->qr_code)->exists()) {
                 $animal->qr_code = Qr::randomCode(8);
             }
@@ -83,6 +90,7 @@ class Animal extends Model
     public function placeAt(Holding $holding): void
     {
         $this->holding_id = $holding->id;
+        $this->organisation_id = $holding->organisation_id;
         $this->forceFill($holding->only(Holding::LOCATION_FIELDS));
     }
 
