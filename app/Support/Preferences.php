@@ -41,6 +41,12 @@ class Preferences
             'accent.regex' => 'Pick a colour like #1b5e37.',
             'dashboards.max' => 'Too many saved charts.',
         ])->validate();
+        // Laravel 9's validated() leaves out an `array` field that has nested rules, even when it
+        // is null, so a reset card (`'farm-milk' => null`) never reaches us. Every card has passed
+        // validation by now, so take `dashboards` as sent; the loop below keeps only known fields.
+        if (array_key_exists('dashboards', $input)) {
+            $data['dashboards'] = $input['dashboards'];
+        }
         $data = array_intersect_key($data, self::DEFAULTS);
 
         $prefs = self::for($user);

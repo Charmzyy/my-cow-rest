@@ -48,7 +48,8 @@ class SettingsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('preferences.theme', 'dark');
 
-        $this->assertSame(['theme', 'accent', 'chart_palette', 'dashboards'], array_keys($this->user->fresh()->preferences));
+        // MySQL's JSON type reorders object keys (shortest first), so compare as a set.
+        $this->assertEqualsCanonicalizing(['theme', 'accent', 'chart_palette', 'dashboards'], array_keys($this->user->fresh()->preferences));
     }
 
     public function test_a_light_accent_is_refused_because_white_text_on_it_is_unreadable()
