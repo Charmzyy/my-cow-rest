@@ -81,7 +81,7 @@ class MilkTest extends TestCase
         $this->save('am', [['animal_id' => $a->id, 'litres' => 8.5], ['animal_id' => $b->id, 'litres' => 6]])
             ->assertOk()->assertJsonPath('saved', 2)->assertJsonPath('total', 14.5);
         $this->save('am', [['animal_id' => $a->id, 'litres' => 9], ['animal_id' => $b->id, 'litres' => 6]])
-            ->assertOk()->assertJsonPath('total', 15.0);
+            ->assertOk()->assertJsonPath('total', 15);   // JSON drops ".0", so whole numbers come back as ints
 
         $this->assertSame(2, MilkLog::count());
         $this->assertEquals(9, DB::table('milk_daily')->where('animal_id', $a->id)->value('litres'));
@@ -200,22 +200,22 @@ class MilkTest extends TestCase
         $url = "/api/holdings/{$this->farm->id}/milk/deliveries";
         $this->postJson($url, ['day' => $this->day(), 'kind' => 'coop', 'buyer_id' => $coop, 'litres' => 15, 'rejected_litres' => 1])
             ->assertCreated()
-            ->assertJsonPath('delivery.price_per_litre', 50.0)
-            ->assertJsonPath('delivery.amount', 700.0);   // (15 - 1) x 50
+            ->assertJsonPath('delivery.price_per_litre', 50)
+            ->assertJsonPath('delivery.amount', 700);   // (15 - 1) x 50
         $this->postJson($url, ['day' => $this->day(), 'kind' => 'sale', 'litres' => 2, 'price_per_litre' => 60, 'paid' => true])->assertCreated();
         $this->postJson($url, ['day' => $this->day(), 'kind' => 'home', 'litres' => 3, 'price_per_litre' => 99])
             ->assertJsonPath('delivery.price_per_litre', null);   // home milk is never priced
 
         $this->getJson("/api/holdings/{$this->farm->id}/milk/summary?days=7")
             ->assertOk()
-            ->assertJsonPath('totals.produced', 22.0)
-            ->assertJsonPath('totals.discarded', 2.0)
-            ->assertJsonPath('totals.coop', 15.0)
-            ->assertJsonPath('totals.rejected', 1.0)
-            ->assertJsonPath('totals.home', 3.0)
-            ->assertJsonPath('totals.income', 820.0)
-            ->assertJsonPath('totals.unpaid', 700.0)
-            ->assertJsonPath('cows.0.litres', 22.0);
+            ->assertJsonPath('totals.produced', 22)
+            ->assertJsonPath('totals.discarded', 2)
+            ->assertJsonPath('totals.coop', 15)
+            ->assertJsonPath('totals.rejected', 1)
+            ->assertJsonPath('totals.home', 3)
+            ->assertJsonPath('totals.income', 820)
+            ->assertJsonPath('totals.unpaid', 700)
+            ->assertJsonPath('cows.0.litres', 22);
     }
 
     public function test_rejected_milk_cannot_exceed_the_delivery()
