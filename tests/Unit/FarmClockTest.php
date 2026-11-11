@@ -42,4 +42,13 @@ class FarmClockTest extends TestCase
         $this->assertSame('pm', FarmClock::currentSession($two));
         $this->assertSame('am', FarmClock::currentSession(Holding::SESSIONS[1]));
     }
+
+    public function test_chart_buckets_cover_the_range_without_gaps()
+    {
+        $this->assertSame(['2026-10-30', '2026-10-31', '2026-11-01'], FarmClock::buckets('2026-10-30', '2026-11-01', 'day'));
+        // 2026-11-04 is a Wednesday: its week starts on Monday the 2nd
+        $this->assertSame(['2026-11-02', '2026-11-09'], FarmClock::buckets('2026-11-04', '2026-11-10', 'week'));
+        $this->assertSame(['2026-01-01', '2026-02-01', '2026-03-01'], FarmClock::buckets('2026-01-31', '2026-03-02', 'month'));
+        $this->assertSame('2026-11-02', FarmClock::bucket('2026-11-08', 'week'));   // Sunday belongs to the week before
+    }
 }

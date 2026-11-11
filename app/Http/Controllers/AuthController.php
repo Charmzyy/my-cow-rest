@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ResetPassword;
 use App\Models\User;
 use App\Support\Phone;
+use App\Support\Preferences;
 use App\Traits\HttpResponses;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -120,7 +121,19 @@ class AuthController extends Controller
             'user' => $user,
             'role' => [$user->role],
             'organisations' => OrganisationController::listFor($user),   // workspaces for the switcher
+            'preferences' => Preferences::for($user),                    // theme, colours, saved charts
         ]);
+    }
+
+    public function preferences(Request $request)
+    {
+        return response()->json(['preferences' => Preferences::for($request->user())]);
+    }
+
+    /** Partial update: only the settings sent change (see Preferences::update). */
+    public function updatePreferences(Request $request)
+    {
+        return response()->json(['preferences' => Preferences::update($request->user(), $request->all())]);
     }
 
     public function logout(Request $request)
@@ -201,9 +214,14 @@ class AuthController extends Controller
         $user = Auth::user();
 
         $validatedData = $request->validate([
+            'fullname' => 'sometimes|required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'avatar' => 'nullable|image|max:2048',
         ]);
+
+        if ($request->has('fullname')) {
+            $user->fullname = trim($validatedData['fullname']);
+        }
 
         if ($request->has('phone')) {
             $user->phone = $validatedData['phone'];

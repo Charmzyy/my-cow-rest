@@ -24,6 +24,15 @@ class Organisation extends Model
 
     protected $hidden = ['logo_path'];
 
+    // Where the app fetches the logo, relative to the API base (the client adds API_URL).
+    // ?v= changes with each upload, so phones never keep showing an old logo from cache.
+    protected $appends = ['logo_url'];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo_path ? "/orgs/{$this->id}/logo?v=" . substr(md5($this->logo_path), 0, 8) : null;
+    }
+
     protected static function booted()
     {
         static::creating(function (Organisation $org) {

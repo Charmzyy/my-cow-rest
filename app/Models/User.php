@@ -60,6 +60,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'preferences',   // sent separately by /me, merged onto the defaults (App\Support\Preferences)
     ];
 
     /**
@@ -69,6 +70,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'preferences' => 'array',
     ];
 
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminCertificationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminOfficerController;
 use App\Http\Controllers\AdminStatsController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AnimalController;
 use App\Http\Controllers\AnimalEventController;
 use App\Http\Controllers\AuthController;
@@ -49,12 +50,19 @@ Route::controller(AuthController::class)->group(function () {
 // Public certificate check: what the QR code on a certificate opens. Throttled against code guessing.
 Route::get('verify/{code}', [CertificateController::class, 'verify'])->middleware('throttle:30,1');
 
+// A workspace's logo (white-label). Public like any logo; the URL changes when the logo does.
+Route::get('orgs/{organisation}/logo', [OrganisationController::class, 'logo'])->middleware('throttle:120,1');
+
 
 // Any signed-in user
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('me', [AuthController::class, 'me']);
     Route::post('logout', [AuthController::class, 'logout']);
-    Route::put('/', [AuthController::class, 'updateProfile']); // update phone / avatar
+    Route::put('/', [AuthController::class, 'updateProfile']); // update name / phone / avatar
+
+    // Personal settings: theme, accent colour, chart colours, saved chart choices
+    Route::get('me/preferences', [AuthController::class, 'preferences']);
+    Route::put('me/preferences', [AuthController::class, 'updatePreferences'])->middleware('throttle:60,1');
 
     // Owner, certifying officer or admin (checked in the controller)
     Route::get('certificates/{certificate}/pdf', [CertificateController::class, 'pdf']);
@@ -63,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('orgs', [OrganisationController::class, 'index']);
     Route::post('orgs', [OrganisationController::class, 'store'])->middleware('throttle:10,1');
     Route::put('orgs/{organisation}', [OrganisationController::class, 'update']);
+    // POST, not PUT: PHP only reads uploaded files from POST requests
+    Route::post('orgs/{organisation}/branding', [OrganisationController::class, 'branding'])->middleware('throttle:20,1');
     Route::get('orgs/{organisation}/members', [OrganisationController::class, 'members']);
     Route::post('orgs/{organisation}/members', [OrganisationController::class, 'addMember']);
     Route::put('orgs/{organisation}/members/{member}', [OrganisationController::class, 'updateMember']);
@@ -131,6 +141,9 @@ Route::middleware(['auth:sanctum', 'role:farmer,worker', 'org'])->group(function
     Route::post('holdings/{holding}/milk/session', [MilkController::class, 'record']);
     Route::get('holdings/{holding}/milk/summary', [MilkController::class, 'summary']);
     Route::get('animals/{animal}/milk', [MilkController::class, 'cow']);
+
+    // Reports: any metric, grouped by time or category, for any range up to two years (ChartCard)
+    Route::get('holdings/{holding}/analytics', [AnalyticsController::class, 'holding']);
 
     // Where the milk went, and who buys it
     Route::get('holdings/{holding}/milk/deliveries', [MilkDeliveryController::class, 'index']);

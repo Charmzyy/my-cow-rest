@@ -8,7 +8,9 @@ use App\Models\Holding;
 use App\Models\Organisation;
 use App\Models\OrganisationMember;
 use App\Models\User;
+use App\Support\Contrast;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -45,6 +47,58 @@ class OrganisationController extends Controller
         $organisation->update($request->validate(['name' => ['required', 'string', 'max:120']]));
 
         return response()->json(['organisation' => $this->present($organisation, $organisation->roleOf($request->user()))]);
+    }
+
+    /**
+     * White-label: the workspace's colour and logo, shown to everyone working in it.
+     * Multipart: brand_color (#rrggbb or empty to clear), logo (image file), remove_logo (1).
+     */
+    public function branding(Request $request, Organisation $organisation)
+    {
+        $this->authorizeManager($request, $organisation);
+        $data = $request->validate([
+            'brand_color' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/', function ($attr, $value, $fail) {
+                if (Contrast::isHex($value) && !Contrast::okForWhiteText($value)) {
+                    $fail('This colour is too light: white text on it would be hard to read outdoors. Pick a darker one.');
+                }
+            }],
+            // No SVG: it can carry scripts. 512 KB is plenty for a logo shown 32 px high.
+            'logo' => ['sometimes', 'file', 'mimes:png,jpg,jpeg,webp', 'max:512'],
+            'remove_logo' => ['sometimes', 'boolean'],
+        ], ['brand_color.regex' => 'Pick a colour like #1b5e37.']);
+
+        if ($request->has('brand_color')) {
+            $organisation->brand_color = $data['brand_color'] ? strtolower($data['brand_color']) : null;
+        }
+
+        $disk = Storage::disk(config('filesystems.default'));
+        $old = $organisation->logo_path;
+        if ($request->hasFile('logo')) {
+            $organisation->logo_path = $request->file('logo')->store("org-logos/{$organisation->id}", config('filesystems.default'));
+        } elseif ($request->boolean('remove_logo')) {
+            $organisation->logo_path = null;
+        }
+
+        $organisation->save();
+        if ($old && $old !== $organisation->logo_path) {
+            $disk->delete($old);
+        }
+        AuditLog::record('organisation.branding', $organisation, ['brand_color' => $organisation->brand_color, 'logo' => (bool) $organisation->logo_path]);
+
+        return response()->json(['organisation' => $this->present($organisation, $organisation->roleOf($request->user()))]);
+    }
+
+    /** The logo file. Public, like any logo: it appears before sign-in checks finish and on shared screens. */
+    public function logo(Organisation $organisation)
+    {
+        $disk = Storage::disk(config('filesystems.default'));
+        abort_unless($organisation->logo_path && $disk->exists($organisation->logo_path), 404);
+
+        return response($disk->get($organisation->logo_path), 200, [
+            'Content-Type' => $disk->mimeType($organisation->logo_path) ?: 'application/octet-stream',
+            'Cache-Control' => 'public, max-age=604800',   // the URL changes when the logo does
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function members(Request $request, Organisation $organisation)
