@@ -49,15 +49,15 @@ class OfflineSyncTest extends TestCase
         ])->assertOk();
     }
 
-    private function at(int $minutesAgo): string
+    private function minutesAgo(int $minutesAgo): string
     {
         return Carbon::now()->subMinutes($minutesAgo)->toIso8601String();
     }
 
     public function test_the_entry_typed_last_wins_whatever_order_phones_sync_in()
     {
-        $this->milk($this->owner, 9, $this->at(5));                       // owner, online, 5 min ago
-        $this->milk($this->worker, 7, $this->at(30))->assertJsonPath('stale', 1);   // worker's phone syncs late: typed earlier
+        $this->milk($this->owner, 9, $this->minutesAgo(5));                       // owner, online, 5 min ago
+        $this->milk($this->worker, 7, $this->minutesAgo(30))->assertJsonPath('stale', 1);   // worker's phone syncs late: typed earlier
 
         $this->assertEquals(9, MilkLog::sole()->litres);
 
@@ -70,8 +70,8 @@ class OfflineSyncTest extends TestCase
 
     public function test_a_newer_offline_entry_replaces_an_older_one_and_is_flagged()
     {
-        $this->milk($this->owner, 9, $this->at(30));
-        $this->milk($this->worker, 7, $this->at(5))->assertJsonPath('stale', 0);
+        $this->milk($this->owner, 9, $this->minutesAgo(30));
+        $this->milk($this->worker, 7, $this->minutesAgo(5))->assertJsonPath('stale', 0);
 
         $this->assertEquals(7, MilkLog::sole()->litres);
         $this->assertEquals(7, MilkClash::sole()->kept_litres);
@@ -80,9 +80,9 @@ class OfflineSyncTest extends TestCase
 
     public function test_correcting_your_own_entry_or_agreeing_is_not_a_clash()
     {
-        $this->milk($this->worker, 7, $this->at(30));
-        $this->milk($this->worker, 7.5, $this->at(20));   // same person fixes a typo
-        $this->milk($this->owner, 7.5, $this->at(10));    // someone else, same number
+        $this->milk($this->worker, 7, $this->minutesAgo(30));
+        $this->milk($this->worker, 7.5, $this->minutesAgo(20));   // same person fixes a typo
+        $this->milk($this->owner, 7.5, $this->minutesAgo(10));    // someone else, same number
 
         $this->assertSame(0, MilkClash::count());
         $this->assertEquals(7.5, MilkLog::sole()->litres);
@@ -91,15 +91,15 @@ class OfflineSyncTest extends TestCase
     public function test_a_phone_clock_in_the_future_cannot_lock_an_entry()
     {
         $this->milk($this->worker, 7, Carbon::now()->addDays(3)->toIso8601String());
-        $this->milk($this->owner, 9, $this->at(0))->assertJsonPath('stale', 0);
+        $this->milk($this->owner, 9, $this->minutesAgo(0))->assertJsonPath('stale', 0);
 
         $this->assertEquals(9, MilkLog::sole()->litres);
     }
 
     public function test_owners_review_clashes_and_workers_cannot()
     {
-        $this->milk($this->owner, 9, $this->at(5));
-        $this->milk($this->worker, 7, $this->at(30));
+        $this->milk($this->owner, 9, $this->minutesAgo(5));
+        $this->milk($this->worker, 7, $this->minutesAgo(30));
 
         Sanctum::actingAs($this->worker);
         $this->getJson("/api/holdings/{$this->farm->id}/milk/clashes")->assertForbidden();
