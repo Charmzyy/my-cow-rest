@@ -37,10 +37,23 @@ class MilkDeliveryController extends Controller
     public function store(Request $request, Holding $holding)
     {
         $this->authorizeFarm($request, $holding, 'milk.write');
+
+        // Offline phones send their own id: a resend (the reply was lost) returns the saved one, never a copy
+        $id = $request->validate(['id' => ['nullable', 'uuid']])['id'] ?? null;
+        if ($id && ($existing = MilkDelivery::find($id))) {
+            abort_unless($existing->holding_id === $holding->id, 409, 'This entry was already saved somewhere else.');
+
+            return response()->json(['delivery' => $existing->load('buyer:id,name,kind')], 200);
+        }
+
         $data = $this->validated($request, $holding);
 
         $delivery = new MilkDelivery($data);
-        $delivery->forceFill(['holding_id' => $holding->id, 'recorded_by' => $request->user()->id])->save();
+        $delivery->forceFill(['holding_id' => $holding->id, 'recorded_by' => $request->user()->id]);
+        if ($id) {
+            $delivery->id = $id;
+        }
+        $delivery->save();
 
         return response()->json(['delivery' => $delivery->load('buyer:id,name,kind')], 201);
     }

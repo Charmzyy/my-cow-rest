@@ -141,6 +141,9 @@ Route::middleware(['auth:sanctum', 'role:farmer,worker', 'org'])->group(function
     Route::post('holdings/{holding}/milk/session', [MilkController::class, 'record']);
     Route::get('holdings/{holding}/milk/summary', [MilkController::class, 'summary']);
     Route::get('animals/{animal}/milk', [MilkController::class, 'cow']);
+    // Offline clashes: entries replaced because someone else's was typed later (owners/managers)
+    Route::get('holdings/{holding}/milk/clashes', [MilkController::class, 'clashes']);
+    Route::put('holdings/{holding}/milk/clashes/seen', [MilkController::class, 'clashesSeen']);
 
     // Reports: any metric, grouped by time or category, for any range up to two years (ChartCard)
     Route::get('holdings/{holding}/analytics', [AnalyticsController::class, 'holding']);

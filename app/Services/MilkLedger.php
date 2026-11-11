@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\AnimalEvent;
 use App\Models\Holding;
+use App\Models\MilkClash;
 use App\Models\MilkLog;
 use App\Models\User;
 use App\Support\Withdrawal;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -16,16 +18,21 @@ use Illuminate\Support\Str;
 class MilkLedger
 {
     /**
-     * Save one milking session for a farm. Each entry: animal_id, litres (null = clear it), discarded, id (optional).
+     * Save one milking session for a farm. Each entry: animal_id, litres (null = clear it), discarded,
+     * id (optional), entered_at (optional: when it was typed on the phone; default now).
      * Re-sending the same session updates the cows' logs in place: never duplicates.
      *
-     * @return array{saved: int, cleared: int}
+     * Offline phones sync late and in any order, so the entry TYPED last wins: one older than what
+     * is already saved is ignored ("stale"). When two different people disagreed, the losing entry
+     * is kept in milk_clashes for the owner to check. One person correcting their own entry is not a clash.
+     *
+     * @return array{saved: int, cleared: int, stale: int}
      */
     public function recordSession(Holding $holding, string $day, string $session, array $entries, User $by): array
     {
-        $saved = $cleared = 0;
+        $saved = $cleared = $stale = 0;
 
-        DB::transaction(function () use ($holding, $day, $session, $entries, $by, &$saved, &$cleared) {
+        DB::transaction(function () use ($holding, $day, $session, $entries, $by, &$saved, &$cleared, &$stale) {
             $blocked = Withdrawal::blocking(array_column($entries, 'animal_id'), $day);
 
             foreach ($entries as $entry) {
@@ -34,6 +41,24 @@ class MilkLedger
                     ->where('session', $session)
                     ->lockForUpdate()
                     ->first();
+
+                $treatment = $blocked[$entry['animal_id']] ?? null;
+                $enteredAt = $this->enteredAt($entry['entered_at'] ?? null);
+                $incoming = [
+                    'litres' => $entry['litres'] === null ? null : (float) $entry['litres'],
+                    // under withdrawal: discarded whatever the phone sent
+                    'discarded' => $entry['litres'] !== null && ($treatment || (bool) ($entry['discarded'] ?? false)),
+                ];
+
+                if ($log && $log->entered_at && $enteredAt->lt($log->entered_at)) {
+                    // Someone typed a newer entry for this milking already: keep it
+                    $this->noteClash($holding, $log, $by, $incoming, $enteredAt, keptIncoming: false);
+                    $stale++;
+                    continue;
+                }
+                if ($log) {
+                    $this->noteClash($holding, $log, $by, $incoming, $enteredAt, keptIncoming: true);
+                }
 
                 if ($entry['litres'] === null) {
                     if ($log) {
@@ -48,14 +73,13 @@ class MilkLedger
                         'milked_on' => $day,
                         'session' => $session,
                     ]);
-                    $treatment = $blocked[$entry['animal_id']] ?? null;
                     $log->forceFill([
                         'holding_id' => $holding->id,
-                        'litres' => $entry['litres'],
-                        // under withdrawal: discarded whatever the phone sent
-                        'discarded' => $treatment ? true : (bool) ($entry['discarded'] ?? false),
+                        'litres' => $incoming['litres'],
+                        'discarded' => $incoming['discarded'],
                         'withdrawal_event_id' => $treatment?->id,
                         'recorded_by' => $by->id,
+                        'entered_at' => $enteredAt,
                     ])->save();
                     $saved++;
                 }
@@ -64,7 +88,44 @@ class MilkLedger
             }
         });
 
-        return ['saved' => $saved, 'cleared' => $cleared];
+        return ['saved' => $saved, 'cleared' => $cleared, 'stale' => $stale];
+    }
+
+    /** The phone's typing time, never later than now (a phone clock can be wrong). */
+    private function enteredAt(?string $value): Carbon
+    {
+        $now = Carbon::now();
+        if (!$value) {
+            return $now;
+        }
+        $at = Carbon::parse($value);
+
+        return $at->gt($now) ? $now : $at;
+    }
+
+    /** Different people, different numbers for the same milking: keep the losing entry for the owner to see. */
+    private function noteClash(Holding $holding, MilkLog $existing, User $by, array $incoming, Carbon $enteredAt, bool $keptIncoming): void
+    {
+        $same = $existing->recorded_by === $by->id;
+        $agree = $incoming['litres'] !== null
+            && abs($existing->litres - $incoming['litres']) < 0.005
+            && $existing->discarded === $incoming['discarded'];
+        if ($same || $agree) {
+            return;
+        }
+
+        $old = ['litres' => $existing->litres, 'discarded' => $existing->discarded, 'by' => $existing->recorded_by, 'at' => $existing->entered_at ?? $existing->updated_at];
+        $new = ['litres' => $incoming['litres'], 'discarded' => $incoming['discarded'], 'by' => $by->id, 'at' => $enteredAt];
+        [$kept, $lost] = $keptIncoming ? [$new, $old] : [$old, $new];
+
+        MilkClash::create([
+            'holding_id' => $holding->id,
+            'animal_id' => $existing->animal_id,
+            'milked_on' => $existing->milked_on->toDateString(),
+            'session' => $existing->session,
+            'kept_litres' => $kept['litres'], 'kept_discarded' => $kept['discarded'], 'kept_by' => $kept['by'], 'kept_at' => $kept['at'],
+            'lost_litres' => $lost['litres'], 'lost_discarded' => $lost['discarded'], 'lost_by' => $lost['by'], 'lost_at' => $lost['at'],
+        ]);
     }
 
     /** A treatment was recorded (possibly late): lock the milkings already logged inside its milk withdrawal. */

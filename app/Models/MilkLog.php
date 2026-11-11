@@ -13,7 +13,7 @@ class MilkLog extends Model
     public const SESSIONS = ['am', 'midday', 'pm'];
 
     protected $fillable = ['litres', 'discarded'];
-    protected $casts = ['milked_on' => 'date:Y-m-d', 'litres' => 'float', 'discarded' => 'boolean'];
+    protected $casts = ['milked_on' => 'date:Y-m-d', 'litres' => 'float', 'discarded' => 'boolean', 'entered_at' => 'datetime'];
 
     public function animal()
     {

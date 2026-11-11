@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Animal;
 use App\Models\Holding;
+use App\Models\MilkClash;
 use App\Models\MilkDelivery;
 use App\Models\MilkLog;
 use App\Services\MilkLedger;
@@ -51,6 +52,7 @@ class MilkController extends Controller
             'entries.*.id' => ['nullable', 'uuid'],
             'entries.*.litres' => ['present', 'nullable', 'numeric', 'between:0,60'],
             'entries.*.discarded' => ['nullable', 'boolean'],
+            'entries.*.entered_at' => ['nullable', 'date'],   // typed on the phone at (offline sync: latest wins)
         ], [
             'day.after_or_equal' => 'Milk can only be entered for the last ' . self::BACKFILL_DAYS . ' days.',
             'session.in' => 'This farm doesn’t record that milking. Change “milkings per day” under Farms.',
@@ -169,6 +171,29 @@ class MilkController extends Controller
             'cows' => $cows,
             'shows_money' => $showMoney,
         ]);
+    }
+
+    /** Milk entries that were overwritten (or ignored) because someone else's entry was typed later. Owners and managers. */
+    public function clashes(Request $request, Holding $holding)
+    {
+        $this->authorizeFarm($request, $holding, 'farm.update');
+
+        $clashes = MilkClash::where('holding_id', $holding->id)->whereNull('seen_at')
+            ->with(['animal:id,name,tag_number', 'keptByUser:id,fullname', 'lostByUser:id,fullname'])
+            ->orderByDesc('milked_on')->orderByDesc('created_at')->limit(100)->get();
+
+        return response()->json(['clashes' => $clashes]);
+    }
+
+    /** "Checked": hides these from the farm home. */
+    public function clashesSeen(Request $request, Holding $holding)
+    {
+        $this->authorizeFarm($request, $holding, 'farm.update');
+        $ids = $request->validate(['ids' => ['required', 'array', 'max:100'], 'ids.*' => ['uuid']])['ids'];
+
+        $n = MilkClash::where('holding_id', $holding->id)->whereIn('id', $ids)->whereNull('seen_at')->update(['seen_at' => now()]);
+
+        return response()->json(['marked' => $n]);
     }
 
     private function sheet(Holding $holding, string $day, string $session): array

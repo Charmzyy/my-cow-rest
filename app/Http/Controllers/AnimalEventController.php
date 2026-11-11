@@ -28,6 +28,14 @@ class AnimalEventController extends Controller
     {
         $this->authorize('logEvent', $animal);
 
+        // Offline phones send their own id: a resend (the reply was lost) returns the saved record, never a copy
+        $id = $request->validate(['id' => ['nullable', 'uuid']])['id'] ?? null;
+        if ($id && ($existing = AnimalEvent::find($id))) {
+            abort_unless($existing->animal_id === $animal->id, 409, 'This record was already saved for another animal.');
+
+            return response()->json(['event' => $existing, 'events' => $animal->events()->get()], 200);
+        }
+
         $data = $request->validate([
             'type' => ['required', Rule::in(AnimalEvent::TYPES)],
             // "today" in Kenya: at 01:00 there the server's UTC date is still yesterday
@@ -55,8 +63,11 @@ class AnimalEventController extends Controller
         }
         $data['course_days'] ??= 1;
 
-        $event = DB::transaction(function () use ($data, $animal, $request, $ledger) {
+        $event = DB::transaction(function () use ($data, $animal, $request, $ledger, $id) {
             $event = new AnimalEvent($data);   // non-health types drop the health fields on save
+            if ($id) {
+                $event->id = $id;
+            }
             $event->animal_id = $animal->id;
             $event->recorded_by = $request->user()->id;
             $event->save();
